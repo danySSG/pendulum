@@ -1,0 +1,4 @@
+PyQt5
+manim
+numpy
+scipy
