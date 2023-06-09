@@ -9,7 +9,7 @@ config.pixel_width = 1280
 
 
 class Phase_Space(Scene):
-    def __init__(self, a, m, g, f, T):
+    def __init__(self, start_angle, b, g, l, m, T):
         super().__init__()
 
         self.Pendulum_Point = 3.5 * LEFT + 0.5 * UP
@@ -19,7 +19,9 @@ class Phase_Space(Scene):
 
         self.T = T
 
-        self.continuous_angles, self.continuous_speeds = solve(a, m, g, f, T)
+        self.continuous_angles, self.continuous_speeds = solve(
+            start_angle, b, g, l, m, T
+        )
 
     def phase(self, t):
         continuous_angles_t = self.continuous_angles(t)
@@ -79,8 +81,8 @@ class Phase_Space(Scene):
                 "numbers_with_elongated_ticks": [-1, 1],
             },
         ).move_to(self.Phase_Point)
-        x_lab = axes.get_x_axis_label("\\theta", direction=UP, buff=0.2)
-        y_lab = axes.get_y_axis_label("\\theta'", direction=RIGHT, buff=0.2)
+        x_lab = axes.get_x_axis_label("\\varphi", direction=UP, buff=0.2)
+        y_lab = axes.get_y_axis_label("\\varphi'", direction=RIGHT, buff=0.2)
         labels = VGroup(x_lab.scale(1), y_lab.scale(1))
 
         self.play(Write(axes, run_time=1), lag_ratio=0.2)
@@ -88,7 +90,9 @@ class Phase_Space(Scene):
         ### Phase space
 
         point = always_redraw(
-            lambda: Dot(self.phase(t.get_value()), radius=0.07).set_color(BLUE)
+            lambda: Dot(self.phase(t.get_value()), radius=0.07, z_index=2).set_color(
+                BLUE
+            )
         )
         trace1 = TracedPath(
             point.get_center,
@@ -160,23 +164,23 @@ class Phase_Space(Scene):
             else:
                 return power(x, 1 / 3)
 
-        angle_theta = always_redraw(
-            lambda: theta(self.continuous_angles(t.get_value()))
-        )
-        label_theta = always_redraw(
-            lambda: MathTex("\\theta", color=YELLOW, z_index=1)
+        angle_phi = always_redraw(lambda: theta(self.continuous_angles(t.get_value())))
+        label_phi = always_redraw(
+            lambda: MathTex("\\varphi", color=YELLOW, z_index=1)
             .scale(1.5 * label_scale(self.continuous_angles(t.get_value())))
-            .next_to(angle_theta, DOWN)
+            .next_to(angle_phi, DOWN)
         )
 
-        ### Запуск
+        ### launch
+
+        self.add(trace1)
 
         self.play(
             AnimationGroup(
                 Create(dashed_line),
                 Create(line),
-                Create(angle_theta),
-                Write(label_theta),
+                Create(angle_phi),
+                Write(label_phi),
                 DrawBorderThenFill(mass),
                 FadeIn(point),
                 lag_ratio=0.1,
@@ -184,7 +188,6 @@ class Phase_Space(Scene):
             )
         )
 
-        self.add(trace1)
         self.add(trace2)
 
         self.wait()

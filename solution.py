@@ -7,21 +7,19 @@ RELATIVE_TOLERANCE = 1e-10
 ABSOLUTE_TOLERANCE = 1e-13
 
 
-def solve(a, m, g, f, T):
+def solve(start_angle, b, g, l, m, T):
     """
     Решает заданную систему дифференциальных уравнений.
     """
-
-    const_fm = -f / m
 
     def dSdt(t, S):
         """
         Функция, представляющая систему дифференциальных уравнений.
         """
         x1, x2 = S  # x1 представляет положение, x2 представляет скорость
-        return [x2, const_fm * x2 - g * sin(x1)]
+        return [x2, -(g / l) * sin(x1) - (b / (m * l)) * x2]
 
-    S0 = (a, 0)  # начальные условия: положение 'a', скорость 0
+    S0 = (start_angle, 0)  # начальные условия: положение 'a', скорость 0
 
     t = linspace(0, T, T * 1000 + 1)
     sol = solve_ivp(

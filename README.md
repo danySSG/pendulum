@@ -13,3 +13,7 @@
 ## Всё готово!
 
 Осталось запустить `window.py` и учиться.
+
+## Замечание
+
+Если анимация создаётся слишком долго, вы можете настроить параметры `config.frame_rate`, `config.pixel_height` и `config.pixel_width` в файле `animation.py`.
