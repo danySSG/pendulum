@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8">
+<title>Маятник — фазовые портреты</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #191613;
+    --panel: #242220;
+    --panel-2: #2b2b2b;
+    --canvas: #0f0e0d;
+    --line: #3b3733;
+    --ink: #ececec;
+    --ink-2: #b8b0a6;
+    --ink-3: #948c82;
+    --accent: #ff5a1f;
+    --accent-h: #ff7a45;
+    --accent-ink: #21120a;
+    --teal: #17a8a8;
+    --c-yellow: #ffff00;
+    --c-blue: #58c4dd;
+    --c-red: #fc6255;
+    --serif: Georgia, 'Times New Roman', serif;
+    --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    --sans: -apple-system, 'Segoe UI', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  .app { max-width: 1160px; margin: 0 auto; padding: 28px 20px 40px; }
+
+  /* ---------- header ---------- */
+  header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; flex-wrap: wrap; margin-bottom: 18px; }
+  .eyebrow { font: 600 11px/1 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; }
+  h1 { font: 400 40px/1.05 var(--serif); margin: 0 0 6px; letter-spacing: .01em; }
+  h1 em { font-style: italic; color: var(--accent); }
+  .sub { margin: 0; color: var(--ink-2); font-size: 13.5px; }
+  .sub code { font: 12.5px var(--mono); color: var(--ink-2); }
+
+  .tabs { display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px; gap: 4px; }
+  .tabs button {
+    font: 600 13.5px var(--sans); color: var(--ink-2);
+    background: none; border: 0; border-radius: 7px; padding: 8px 16px; cursor: pointer;
+  }
+  .tabs button:hover { color: var(--ink); }
+  .tabs button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+  .tabs button:focus-visible, .btn:focus-visible, .toggle input:focus-visible, .theory summary:focus-visible {
+    outline: 2px solid var(--accent-h); outline-offset: 2px;
+  }
+
+  /* ---------- stage ---------- */
+  .stage { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .panel-head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 14px; border-bottom: 1px solid var(--line); min-height: 38px;
+  }
+  .panel-title { font: 600 11px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+  .panel-head .spacer { flex: 1; }
+  .hint { font-size: 12px; color: var(--ink-3); }
+  .legend { display: flex; gap: 12px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font: italic 14px var(--serif); color: var(--ink-2); }
+  .chip i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+  .toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); cursor: pointer; user-select: none; }
+  .toggle input { accent-color: var(--accent); margin: 0; }
+  canvas { display: block; width: 100%; aspect-ratio: 1.08 / 1; background: var(--canvas); }
+  #cv-pend { touch-action: none; }
+
+  /* ---------- controls ---------- */
+  .deck { display: grid; grid-template-columns: 1fr 264px; gap: 14px; margin-top: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 26px; align-content: start; }
+  .srow label { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; color: var(--ink-2); cursor: pointer; }
+  .srow output { font: 13px var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+  .srow input[type="range"] { width: 100%; margin: 7px 0 0; accent-color: var(--accent); cursor: pointer; }
+  .preset {
+    font: 600 10.5px var(--mono); color: var(--ink-2); background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; cursor: pointer;
+  }
+  .preset:hover { color: var(--accent-h); border-color: var(--accent); }
+
+  .side { display: flex; flex-direction: column; gap: 14px; }
+  .playback { display: flex; gap: 10px; }
+  .btn {
+    flex: 1; font: 600 14px var(--sans); border: 0; border-radius: 9px; padding: 10px 12px; cursor: pointer;
+  }
+  .btn-accent { background: var(--accent); color: var(--accent-ink); }
+  .btn-accent:hover { background: var(--accent-h); }
+  .btn-ghost { background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); }
+  .btn-ghost:hover { border-color: var(--ink-3); }
+  .kbd-hint { font-size: 11.5px; color: var(--ink-3); margin-top: 8px; }
+  .kbd-hint kbd { font: 11px var(--mono); background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+
+  .readouts { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .readouts dt { font: italic 15px var(--serif); color: var(--ink-2); }
+  .readouts dd { margin: 0; font: 13.5px var(--mono); font-variant-numeric: tabular-nums; text-align: right; align-self: center; }
+
+  /* ---------- theory ---------- */
+  .theory { margin-top: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); overflow: hidden; }
+  .theory summary {
+    list-style: none; cursor: pointer; padding: 12px 18px;
+    font: 600 14px var(--sans); color: #7fd6d6;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .theory summary::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--teal); }
+  .theory summary::-webkit-details-marker { display: none; }
+  .theory summary:hover { color: #a9e6e6; }
+  .theory-body { padding: 4px 20px 18px; border-top: 1px solid var(--line); max-width: 72ch; }
+  .theory-body h3 { font: italic 400 19px var(--serif); margin: 18px 0 6px; }
+  .theory-body p { margin: 6px 0; color: var(--ink-2); font-size: 14px; }
+  .eq {
+    font: italic 17px/1.8 var(--serif); color: var(--ink);
+    background: var(--canvas); border-radius: 8px; padding: 10px 16px; margin: 10px 0;
+    overflow-x: auto; white-space: nowrap;
+  }
+  .eq.small { font-size: 14.5px; }
+
+  footer { margin-top: 18px; color: var(--ink-3); font-size: 12.5px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  footer .ms { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  footer a { color: var(--ink-2); }
+
+  @media (max-width: 860px) {
+    .stage, .deck, .sliders { grid-template-columns: 1fr; }
+    h1 { font-size: 32px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header>
+    <div class="brand">
+      <div class="eyebrow">danySSG · 2023 → 2026</div>
+      <h1>Ма<em>я</em>тник</h1>
+      <p class="sub">наследник <code>pendulum</code> · <code>double-pendulum</code> · <code>my-first-binder</code> — теперь в реальном времени</p>
+    </div>
+    <nav class="tabs" aria-label="Режим">
+      <button data-mode="single" aria-pressed="true">Автономный</button>
+      <button data-mode="forced" aria-pressed="false">Вынужденный</button>
+      <button data-mode="double" aria-pressed="false">Двойной</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="stage">
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">Маятник</span>
+          <span class="spacer"></span>
+          <span class="hint">грузик можно перетаскивать</span>
+        </div>
+        <canvas id="cv-pend" aria-label="Анимация маятника"></canvas>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">Фазовый портрет</span>
+          <span class="legend" id="legend"></span>
+          <span class="spacer"></span>
+          <label class="toggle" title="Обещание из ноутбука 2023 года: фазовое пространство маятника — цилиндр. Угол берётся по модулю 2π.">
+            <input type="checkbox" id="wrap"> цилиндр
+          </label>
+        </div>
+        <canvas id="cv-phase" aria-label="Фазовый портрет"></canvas>
+      </div>
+    </section>
+
+    <section class="deck">
+      <div class="card sliders" id="sliders"></div>
+      <div class="side">
+        <div class="card">
+          <div class="playback">
+            <button class="btn btn-accent" id="btnPlay">Пауза</button>
+            <button class="btn btn-ghost" id="btnReset">Сброс</button>
+          </div>
+          <div class="srow" style="margin-top:12px">
+            <label for="speed">Скорость времени <output id="speedOut">×1.00</output></label>
+            <input type="range" id="speed" min="0.1" max="3" step="0.05" value="1">
+          </div>
+          <p class="kbd-hint"><kbd>Пробел</kbd> — пауза · <kbd>R</kbd> — сброс</p>
+        </div>
+        <div class="card">
+          <dl class="readouts" id="readouts"></dl>
+        </div>
+      </div>
+    </section>
+
+    <details class="theory">
+      <summary>Читать теорию</summary>
+      <div class="theory-body">
+        <h3>Автономный маятник</h3>
+        <p>Груз массы <i>m</i> на невесомом стержне длины <i>l</i> в среде с вязкостью <i>b</i>:</p>
+        <div class="eq">θ̈ = −(g∕l)·sin θ − (b∕ml)·θ̇</div>
+        <h3>Маятник с периодическим возмущением</h3>
+        <p>К автономному уравнению добавляется вынуждающий момент с экспоненциально меняющейся амплитудой:</p>
+        <div class="eq">θ̈ = e<sup>a₁t∕30</sup>·cos(a₂t) − (g∕l)·sin θ − (b∕ml)·θ̇</div>
+        <h3>Двойной маятник</h3>
+        <p>Углы θ₁, θ₂ отсчитываются от вертикали; уравнения получаются из лагранжиана (вывод — в theory.pdf оригинального репозитория):</p>
+        <div class="eq small">θ̈₁ = [−g(2m₁+m₂)sin θ₁ − m₂g·sin(θ₁−2θ₂) − 2 sin(θ₁−θ₂)·m₂(θ̇₂²l₂ + θ̇₁²l₁cos(θ₁−θ₂))] ∕ [l₁(2m₁+m₂−m₂cos(2θ₁−2θ₂))]</div>
+        <div class="eq small">θ̈₂ = [2 sin(θ₁−θ₂)·(θ̇₁²l₁(m₁+m₂) + g(m₁+m₂)cos θ₁ + θ̇₂²l₂m₂cos(θ₁−θ₂))] ∕ [l₂(2m₁+m₂−m₂cos(2θ₁−2θ₂))]</div>
+        <h3>Численное решение</h3>
+        <p>Система интегрируется методом Рунге–Кутты 4-го порядка с шагом 2 мс — прямо во время движения. В 2023-м это делал <code style="font-family:var(--mono);font-size:12.5px">scipy.solve_ivp</code> (DOP853), после чего Manim минутами рендерил видео. Теперь между «подвинул слайдер» и «увидел» — один кадр.</p>
+        <h3>Фазовый цилиндр</h3>
+        <p>Последняя ячейка ноутбука 2023 года обещала: «в следующей версии фазовое пространство будет представлено цилиндром». Переключатель «цилиндр» выполняет это обещание: угол берётся по модулю 2π, и вращение («солнышко») перестаёт убегать за край портрета.</p>
+      </div>
+    </details>
+  </main>
+
+  <footer>
+    <span>Кадр считается за <span class="ms" id="frameMs">—</span> мс. В 2023-м ролик на 30 секунд рендерился минутами.</span>
+    <span>g по умолчанию — 2.0 м/с², как в оригинале · θ₀ = 2.71 ≈ e</span>
+  </footer>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const TAU = Math.PI * 2;
+  const wrapPi = a => { a = (a + Math.PI) % TAU; if (a < 0) a += TAU; return a - Math.PI; };
+  const C = {
+    yellow: '#ffff00', blue: '#58c4dd', red: '#fc6255', orange: '#ff862f',
+    white: '#ececec', grey: '#8a8279', canvas: '#0f0e0d',
+  };
+
+  // ---------- режимы ----------
+  const S = (key, label, min, max, step, def, opts = {}) => ({ key, label, min, max, step, def, ...opts });
+  const gSlider = S('g', 'Ускорение g', 0.1, 20, 0.1, 2.0, { unit: 'м/с²', preset: 9.8 });
+
+  const MODES = {
+    single: {
+      sliders: [
+        S('th0', 'Начальный угол θ₀', -3.14, 3.14, 0.01, 2.71, { unit: 'рад', resets: true }),
+        S('b', 'Вязкость b', 0, 5, 0.01, 0.35),
+        gSlider,
+        S('l', 'Длина стержня l', 0.1, 5, 0.1, 1.0, { unit: 'м' }),
+        S('m', 'Масса груза m', 0.1, 10, 0.1, 5.0, { unit: 'кг' }),
+      ],
+      init: p => [p.th0, 0],
+      deriv: (t, y, p) => [y[1], -(p.g / p.l) * Math.sin(y[0]) - (p.b / (p.m * p.l)) * y[1]],
+      reach: p => p.l,
+      series: [{ i: 0, color: C.yellow, label: null }],
+      bobs: [{ color: C.red, trail: C.orange, l: p => p.l, m: p => p.m, sub: '' }],
+      energy: (y, p) => 0.5 * p.m * (p.l * y[1]) ** 2 + p.m * p.g * p.l * (1 - Math.cos(y[0])),
+      readouts: ['t', 'th', 'w', 'E'],
+    },
+    forced: {
+      sliders: [
+        S('th0', 'Начальный угол θ₀', -3.14, 3.14, 0.01, 2.71, { unit: 'рад', resets: true }),
+        S('b', 'Вязкость b', 0, 5, 0.01, 0.35),
+        gSlider,
+        S('l', 'Длина стержня l', 0.1, 5, 0.1, 1.0, { unit: 'м' }),
+        S('m', 'Масса груза m', 0.1, 10, 0.1, 5.0, { unit: 'кг' }),
+        S('a1', 'Эксп. коэффициент a₁', -2, 2, 0.05, 1.0),
+        S('a2', 'Период. коэффициент a₂', 0, 10, 0.05, 2.0),
+      ],
+      init: p => [p.th0, 0],
+      deriv: (t, y, p) => [y[1],
+        Math.exp(p.a1 * t / 30) * Math.cos(p.a2 * t)
+        - (p.g / p.l) * Math.sin(y[0]) - (p.b / (p.m * p.l)) * y[1]],
+      reach: p => p.l,
+      series: [{ i: 0, color: C.yellow, label: null }],
+      bobs: [{ color: C.red, trail: C.orange, l: p => p.l, m: p => p.m, sub: '' }],
+      energy: (y, p) => 0.5 * p.m * (p.l * y[1]) ** 2 + p.m * p.g * p.l * (1 - Math.cos(y[0])),
+      readouts: ['t', 'th', 'w', 'F', 'E'],
+    },
+    double: {
+      sliders: [
+        S('th10', 'Начальный угол θ₁', -3.14, 3.14, 0.01, 2.71, { unit: 'рад', resets: true }),
+        S('th20', 'Начальный угол θ₂', -3.14, 3.14, 0.01, 2.71, { unit: 'рад', resets: true }),
+        S('l1', 'Длина стержня l₁', 0.1, 5, 0.1, 1.0, { unit: 'м' }),
+        S('l2', 'Длина стержня l₂', 0.1, 5, 0.1, 1.0, { unit: 'м' }),
+        S('m1', 'Масса груза m₁', 0.1, 10, 0.1, 5.0, { unit: 'кг' }),
+        S('m2', 'Масса груза m₂', 0.1, 10, 0.1, 5.0, { unit: 'кг' }),
+        gSlider,
+      ],
+      init: p => [p.th10, 0, p.th20, 0],
+      deriv: (t, y, p) => {
+        const [a1, w1, a2, w2] = y, { m1, m2, l1, l2, g } = p;
+        const d = a1 - a2, sd = Math.sin(d), cd = Math.cos(d);
+        const den = 2 * m1 + m2 - m2 * Math.cos(2 * d);
+        const dw1 = (-g * (2 * m1 + m2) * Math.sin(a1) - m2 * g * Math.sin(a1 - 2 * a2)
+          - 2 * sd * m2 * (l2 * w2 * w2 + l1 * w1 * w1 * cd)) / (l1 * den);
+        const dw2 = (2 * sd * (l1 * w1 * w1 * (m1 + m2) + g * (m1 + m2) * Math.cos(a1)
+          + l2 * w2 * w2 * m2 * cd)) / (l2 * den);
+        return [w1, dw1, w2, dw2];
+      },
+      reach: p => p.l1 + p.l2,
+      series: [
+        { i: 0, color: C.yellow, label: 'θ₁' },
+        { i: 2, color: C.blue, label: 'θ₂' },
+      ],
+      bobs: [
+        { color: C.yellow, trail: C.yellow, l: p => p.l1, m: p => p.m1, sub: '1' },
+        { color: C.blue, trail: C.blue, l: p => p.l2, m: p => p.m2, sub: '2' },
+      ],
+      energy: (y, p) => {
+        const [a1, w1, a2, w2] = y, { m1, m2, l1, l2, g } = p;
+        return 0.5 * (m1 + m2) * l1 * l1 * w1 * w1 + 0.5 * m2 * l2 * l2 * w2 * w2
+          + m2 * l1 * l2 * w1 * w2 * Math.cos(a1 - a2)
+          - (m1 + m2) * g * l1 * Math.cos(a1) - m2 * g * l2 * Math.cos(a2)
+          + (m1 + m2) * g * l1 + m2 * g * l2;
+      },
+      readouts: ['t', 'th1', 'th2', 'w1', 'w2', 'E'],
+    },
+  };
+
+  const READOUT_DEFS = {
+    t:   { label: 't',  fmt: s => s.t.toFixed(2) + ' с' },
+    th:  { label: 'θ',  fmt: s => s.y[0].toFixed(2) + ' рад' },
+    w:   { label: 'θ̇',  fmt: s => s.y[1].toFixed(2) + ' рад/с' },
+    th1: { label: 'θ₁', fmt: s => s.y[0].toFixed(2) + ' рад' },
+    th2: { label: 'θ₂', fmt: s => s.y[2].toFixed(2) + ' рад' },
+    w1:  { label: 'θ̇₁', fmt: s => s.y[1].toFixed(2) + ' рад/с' },
+    w2:  { label: 'θ̇₂', fmt: s => s.y[3].toFixed(2) + ' рад/с' },
+    F:   { label: 'F',  fmt: s => (Math.exp(P.a1 * s.t / 30) * Math.cos(P.a2 * s.t)).toFixed(2) },
+    E:   { label: 'E',  fmt: s => MODES[s.mode].energy(s.y, P).toFixed(2) + ' Дж' },
+  };
+
+  // ---------- состояние ----------
+  const P = {};
+  const sim = {
+    mode: 'single', y: [], t: 0,
+    running: !matchMedia('(prefers-reduced-motion: reduce)').matches,
+    dragging: -1, speed: 1,
+    phase: [],            // по одному плоскому массиву [θ,ω,θ,ω,…] на серию
+    bobTrail: [],         // [{t, ang:[…]}]
+    maxTh: 1, maxW: 1, rTh: 1.4, rW: 1.4,
+    bobPx: [], pivotPx: null,
+  };
+  const H = 0.002, PUSH_EVERY = 3, TRAIL_CAP = 24000, BOB_FADE = 0.55;
+  let pushCnt = 0;
+
+  function rk4(t, y, h, f) {
+    const k1 = f(t, y, P);
+    const y2 = y.map((v, i) => v + 0.5 * h * k1[i]);
+    const k2 = f(t + h / 2, y2, P);
+    const y3 = y.map((v, i) => v + 0.5 * h * k2[i]);
+    const k3 = f(t + h / 2, y3, P);
+    const y4 = y.map((v, i) => v + h * k3[i]);
+    const k4 = f(t + h, y4, P);
+    return y.map((v, i) => v + h / 6 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]));
+  }
+
+  function recomputeMax() {
+    let mt = 0.8, mw = 0.8;
+    for (const arr of sim.phase) {
+      for (let i = 0; i < arr.length; i += 2) {
+        if (!Number.isFinite(arr[i])) continue;
+        const a = Math.abs(arr[i]), b = Math.abs(arr[i + 1]);
+        if (a > mt) mt = a;
+        if (b > mw) mw = b;
+      }
+    }
+    sim.maxTh = mt;
+    sim.maxW = mw;
+  }
+
+  function pushPhase() {
+    const md = MODES[sim.mode];
+    let trimmed = false;
+    md.series.forEach((s, k) => {
+      const th = sim.y[s.i], w = sim.y[s.i + 1];
+      const arr = sim.phase[k];
+      arr.push(th, w);
+      if (arr.length > TRAIL_CAP) { arr.splice(0, TRAIL_CAP / 4); trimmed = true; }
+      const a = Math.abs(th), b = Math.abs(w);
+      if (a > sim.maxTh) sim.maxTh = a;
+      if (b > sim.maxW) sim.maxW = b;
+    });
+    if (trimmed) recomputeMax();
+  }
+
+  function stepSim(dt) {
+    const md = MODES[sim.mode];
+    const n = Math.max(1, Math.ceil(dt / H)), h = dt / n;
+    for (let i = 0; i < n; i++) {
+      sim.y = rk4(sim.t, sim.y, h, md.deriv);
+      sim.t += h;
+      if (++pushCnt >= PUSH_EVERY) { pushCnt = 0; pushPhase(); }
+    }
+    sim.bobTrail.push({ t: sim.t, ang: md.series.map(s => sim.y[s.i]) });
+    while (sim.bobTrail.length && sim.t - sim.bobTrail[0].t > BOB_FADE) sim.bobTrail.shift();
+  }
+
+  function resetSim() {
+    const md = MODES[sim.mode];
+    sim.y = md.init(P);
+    sim.t = 0;
+    sim.phase = md.series.map(() => []);
+    sim.bobTrail = [];
+    sim.maxTh = Math.max(...md.series.map(s => Math.abs(sim.y[s.i])), 0.8);
+    sim.maxW = 0.8;
+    pushCnt = 0;
+    sim.dragging = -1;
+    pushPhase();
+  }
+
+  // ---------- DOM ----------
+  const $ = id => document.getElementById(id);
+  const slidersEl = $('sliders'), readoutsEl = $('readouts'), legendEl = $('legend');
+  const btnPlay = $('btnPlay'), btnReset = $('btnReset'), wrapEl = $('wrap');
+  let readoutSpans = [];
+
+  function buildSliders() {
+    slidersEl.innerHTML = '';
+    for (const cfg of MODES[sim.mode].sliders) {
+      P[cfg.key] = cfg.def;
+      const row = document.createElement('div');
+      row.className = 'srow';
+      const label = document.createElement('label');
+      const name = document.createElement('span');
+      name.textContent = cfg.label;
+      const out = document.createElement('output');
+      const fmt = v => v.toFixed(2) + (cfg.unit ? ' ' + cfg.unit : '');
+      out.textContent = fmt(cfg.def);
+      label.append(name, out);
+      if (cfg.preset != null) {
+        const chip = document.createElement('button');
+        chip.type = 'button'; chip.className = 'preset'; chip.textContent = String(cfg.preset);
+        chip.title = 'Земное значение';
+        name.append(' ', chip);
+        chip.addEventListener('click', () => { input.value = cfg.preset; input.dispatchEvent(new Event('input')); });
+      }
+      const input = document.createElement('input');
+      input.type = 'range';
+      input.min = cfg.min; input.max = cfg.max; input.step = cfg.step; input.value = cfg.def;
+      input.setAttribute('aria-label', cfg.label);
+      input.addEventListener('input', () => {
+        P[cfg.key] = parseFloat(input.value);
+        out.textContent = fmt(P[cfg.key]);
+        if (cfg.resets) resetSim();
+      });
+      label.htmlFor = input.id = 'sl-' + cfg.key;
+      row.append(label, input);
+      slidersEl.append(row);
+    }
+  }
+
+  function buildReadouts() {
+    readoutsEl.innerHTML = '';
+    readoutSpans = [];
+    for (const key of MODES[sim.mode].readouts) {
+      const def = READOUT_DEFS[key];
+      const dt = document.createElement('dt');
+      dt.textContent = def.label;
+      const dd = document.createElement('dd');
+      readoutsEl.append(dt, dd);
+      readoutSpans.push([dd, def.fmt]);
+    }
+  }
+
+  function buildLegend() {
+    legendEl.innerHTML = '';
+    for (const s of MODES[sim.mode].series) {
+      if (!s.label) continue;
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      const i = document.createElement('i');
+      i.style.background = s.color;
+      chip.append(i, s.label);
+      legendEl.append(chip);
+    }
+  }
+
+  function setMode(mode) {
+    sim.mode = mode;
+    document.querySelectorAll('.tabs button').forEach(b =>
+      b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+    buildSliders();
+    buildReadouts();
+    buildLegend();
+    resetSim();
+  }
+
+  // ---------- канвасы ----------
+  const cvP = $('cv-pend'), cvF = $('cv-phase');
+  const ctxP = cvP.getContext('2d'), ctxF = cvF.getContext('2d');
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  function fitCanvas(cv) {
+    const w = cv.clientWidth, h = cv.clientHeight;
+    if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+  }
+  new ResizeObserver(() => { fitCanvas(cvP); fitCanvas(cvF); }).observe(cvP);
+
+  function mathText(ctx, ch, sub, x, y, size, color) {
+    ctx.fillStyle = color;
+    ctx.font = 'italic ' + size + 'px ' + 'Georgia, "Times New Roman", serif';
+    ctx.fillText(ch, x, y);
+    if (sub) {
+      const w = ctx.measureText(ch).width;
+      ctx.font = 'italic ' + (size * 0.62) + 'px Georgia, "Times New Roman", serif';
+      ctx.fillText(sub, x + w + 1, y + size * 0.22);
+    }
+  }
+
+  function drawAngleArc(ctx, px, py, theta, r, sub) {
+    const w = wrapPi(theta);
+    if (Math.abs(w) < 0.03) return;
+    const to = Math.atan2(Math.cos(w), Math.sin(w));
+    ctx.beginPath();
+    ctx.strokeStyle = C.grey;
+    ctx.lineWidth = 1.4;
+    ctx.arc(px, py, r, Math.PI / 2, to, w > 0);
+    ctx.stroke();
+    const scale = Math.min(1, Math.abs(w) ** (1 / 3));
+    const mid = Math.PI / 2 - w / 2;
+    const lr = r + 15;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    mathText(ctx, 'θ', sub, px + lr * Math.cos(mid), py + lr * Math.sin(mid), 18 * scale, C.white);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  }
+
+  function drawPend() {
+    fitCanvas(cvP);
+    const W = cvP.width / dpr, Hh = cvP.height / dpr;
+    ctxP.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctxP.fillStyle = C.canvas;
+    ctxP.fillRect(0, 0, W, Hh);
+    const md = MODES[sim.mode];
+    const reach = md.reach(P);
+    const s = 0.42 * Math.min(W, Hh) / reach;
+    const cx = W / 2, cy = Hh / 2;
+    sim.pivotPx = { x: cx, y: cy };
+
+    // штриховая вертикаль
+    ctxP.setLineDash([6, 6]);
+    ctxP.strokeStyle = '#4a453f';
+    ctxP.lineWidth = 1.2;
+    ctxP.beginPath();
+    ctxP.moveTo(cx, cy);
+    ctxP.lineTo(cx, cy + s * md.bobs[0].l(P) * 0.95);
+    ctxP.stroke();
+    ctxP.setLineDash([]);
+
+    // позиции грузов
+    const pts = [{ x: cx, y: cy }];
+    let px = cx, py = cy;
+    md.bobs.forEach((b, k) => {
+      const th = sim.y[md.series[k].i];
+      px += s * b.l(P) * Math.sin(th);
+      py += s * b.l(P) * Math.cos(th);
+      pts.push({ x: px, y: py });
+    });
+
+    // затухающие следы грузов
+    for (let k = 0; k < md.bobs.length; k++) {
+      const tr = sim.bobTrail;
+      if (tr.length < 2) break;
+      ctxP.lineWidth = 2.4;
+      ctxP.lineCap = 'round';
+      for (let i = 1; i < tr.length; i++) {
+        const posAt = rec => {
+          let x = cx, y = cy;
+          for (let j = 0; j <= k; j++) {
+            x += s * md.bobs[j].l(P) * Math.sin(rec.ang[j]);
+            y += s * md.bobs[j].l(P) * Math.cos(rec.ang[j]);
+          }
+          return { x, y };
+        };
+        const a = posAt(tr[i - 1]), b = posAt(tr[i]);
+        const alpha = Math.max(0, 1 - (sim.t - tr[i].t) / BOB_FADE);
+        ctxP.globalAlpha = alpha * 0.75;
+        ctxP.strokeStyle = md.bobs[k].trail;
+        ctxP.beginPath(); ctxP.moveTo(a.x, a.y); ctxP.lineTo(b.x, b.y); ctxP.stroke();
+      }
+      ctxP.globalAlpha = 1;
+    }
+
+    // стержни
+    ctxP.strokeStyle = C.white;
+    ctxP.lineWidth = 2.2;
+    ctxP.beginPath();
+    for (let i = 0; i < pts.length - 1; i++) {
+      ctxP.moveTo(pts[i].x, pts[i].y);
+      ctxP.lineTo(pts[i + 1].x, pts[i + 1].y);
+    }
+    ctxP.stroke();
+
+    // точка подвеса
+    ctxP.fillStyle = C.white;
+    ctxP.beginPath(); ctxP.arc(cx, cy, 3.2, 0, TAU); ctxP.fill();
+
+    // дуги углов (θ₂ — от вертикали в точке сочленения)
+    drawAngleArc(ctxP, cx, cy, sim.y[0], Math.min(34, s * md.bobs[0].l(P) * 0.45), md.bobs.length > 1 ? '1' : '');
+    if (md.bobs.length > 1) {
+      const j = pts[1];
+      ctxP.setLineDash([4, 5]);
+      ctxP.strokeStyle = '#4a453f';
+      ctxP.beginPath(); ctxP.moveTo(j.x, j.y); ctxP.lineTo(j.x, j.y + s * P.l2 * 0.6); ctxP.stroke();
+      ctxP.setLineDash([]);
+      drawAngleArc(ctxP, j.x, j.y, sim.y[2], Math.min(28, s * P.l2 * 0.4), '2');
+    }
+
+    // грузы
+    sim.bobPx = [];
+    md.bobs.forEach((b, k) => {
+      const p = pts[k + 1];
+      const r = 7 * Math.cbrt(b.m(P)) + 2;
+      ctxP.fillStyle = b.color;
+      ctxP.beginPath(); ctxP.arc(p.x, p.y, r, 0, TAU); ctxP.fill();
+      ctxP.strokeStyle = C.canvas;
+      ctxP.lineWidth = 2;
+      ctxP.stroke();
+      sim.bobPx.push({ x: p.x, y: p.y, r: Math.max(r, 16) });
+    });
+  }
+
+  const niceStep = raw => {
+    const p = Math.pow(10, Math.floor(Math.log10(raw)));
+    const m = raw / p;
+    return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p;
+  };
+
+  function drawPhase() {
+    fitCanvas(cvF);
+    const W = cvF.width / dpr, Hh = cvF.height / dpr;
+    ctxF.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctxF.fillStyle = C.canvas;
+    ctxF.fillRect(0, 0, W, Hh);
+    const md = MODES[sim.mode];
+    const wrap = wrapEl.checked;
+
+    const tTh = wrap ? Math.PI : Math.max(sim.maxTh * 1.15, 1.2);
+    const tW = Math.max(sim.maxW * 1.15, 1.2);
+    sim.rTh += (tTh - sim.rTh) * 0.12;
+    sim.rW += (tW - sim.rW) * 0.12;
+
+    const pad = 30;
+    const cx = W / 2, cy = Hh / 2;
+    const sx = (W / 2 - pad) / sim.rTh, sy = (Hh / 2 - pad) / sim.rW;
+    const X = th => cx + th * sx, Y = w => cy - w * sy;
+
+    // оси со стрелками
+    ctxF.strokeStyle = C.grey;
+    ctxF.fillStyle = C.grey;
+    ctxF.lineWidth = 1.3;
+    ctxF.beginPath();
+    ctxF.moveTo(pad * 0.4, cy); ctxF.lineTo(W - pad * 0.4, cy);
+    ctxF.moveTo(cx, Hh - pad * 0.4); ctxF.lineTo(cx, pad * 0.4);
+    ctxF.stroke();
+    ctxF.beginPath();
+    ctxF.moveTo(W - pad * 0.4, cy); ctxF.lineTo(W - pad * 0.4 - 9, cy - 4); ctxF.lineTo(W - pad * 0.4 - 9, cy + 4); ctxF.fill();
+    ctxF.beginPath();
+    ctxF.moveTo(cx, pad * 0.4); ctxF.lineTo(cx - 4, pad * 0.4 + 9); ctxF.lineTo(cx + 4, pad * 0.4 + 9); ctxF.fill();
+
+    // деления
+    ctxF.font = '10.5px ' + 'ui-monospace, Menlo, monospace';
+    ctxF.textAlign = 'center'; ctxF.textBaseline = 'top';
+    if (wrap) {
+      const t = [[-Math.PI, '−π'], [-Math.PI / 2, '−π/2'], [Math.PI / 2, 'π/2'], [Math.PI, 'π']];
+      for (const [v, lb] of t) {
+        ctxF.beginPath(); ctxF.moveTo(X(v), cy - 4); ctxF.lineTo(X(v), cy + 4); ctxF.stroke();
+        ctxF.fillText(lb, X(v), cy + 7);
+      }
+    } else {
+      const st = niceStep(sim.rTh / 2.2);
+      for (let v = st; v <= sim.rTh; v += st) {
+        for (const vv of [v, -v]) {
+          ctxF.beginPath(); ctxF.moveTo(X(vv), cy - 4); ctxF.lineTo(X(vv), cy + 4); ctxF.stroke();
+          ctxF.fillText(String(parseFloat(vv.toFixed(2))), X(vv), cy + 7);
+        }
+      }
+    }
+    const stw = niceStep(sim.rW / 2.2);
+    ctxF.textAlign = 'left'; ctxF.textBaseline = 'middle';
+    for (let v = stw; v <= sim.rW; v += stw) {
+      for (const vv of [v, -v]) {
+        ctxF.beginPath(); ctxF.moveTo(cx - 4, Y(vv)); ctxF.lineTo(cx + 4, Y(vv)); ctxF.stroke();
+        ctxF.fillText(String(parseFloat(vv.toFixed(2))), cx + 8, Y(vv));
+      }
+    }
+
+    // подписи осей
+    ctxF.textAlign = 'left'; ctxF.textBaseline = 'alphabetic';
+    mathText(ctxF, 'θ', '', W - pad * 0.4 - 4, cy - 10, 17, C.white);
+    mathText(ctxF, 'θ̇', '', cx + 10, pad * 0.4 + 14, 17, C.white);
+
+    // траектории
+    md.series.forEach((sr, k) => {
+      const arr = sim.phase[k];
+      if (arr.length >= 4) {
+        ctxF.strokeStyle = sr.color;
+        ctxF.lineWidth = 1.8;
+        ctxF.globalAlpha = 0.85;
+        ctxF.beginPath();
+        let prev = null;
+        for (let i = 0; i < arr.length; i += 2) {
+          let th = arr[i];
+          if (!Number.isFinite(th)) { prev = null; continue; }
+          if (wrap) th = wrapPi(th);
+          const x = X(th), y = Y(arr[i + 1]);
+          if (prev === null || (wrap && Math.abs(th - prev) > Math.PI)) ctxF.moveTo(x, y);
+          else ctxF.lineTo(x, y);
+          prev = th;
+        }
+        ctxF.stroke();
+        ctxF.globalAlpha = 1;
+      }
+      // текущая точка с кольцом цвета фона — рисуется всегда, даже без следа
+      let th = sim.y[sr.i];
+      if (wrap) th = wrapPi(th);
+      const x = X(th), y = Y(sim.y[sr.i + 1]);
+      ctxF.beginPath(); ctxF.arc(x, y, 6.5, 0, TAU); ctxF.fillStyle = C.canvas; ctxF.fill();
+      ctxF.beginPath(); ctxF.arc(x, y, 4.5, 0, TAU); ctxF.fillStyle = sr.color; ctxF.fill();
+    });
+  }
+
+  // ---------- перетаскивание ----------
+  cvP.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    const rect = cvP.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    for (let k = sim.bobPx.length - 1; k >= 0; k--) {
+      const b = sim.bobPx[k];
+      if ((x - b.x) ** 2 + (y - b.y) ** 2 <= b.r * b.r) {
+        sim.dragging = k;
+        // разрыв фазового следа: скачок состояния при перетаскивании — не траектория
+        for (const arr of sim.phase) arr.push(NaN, NaN);
+        try { cvP.setPointerCapture(e.pointerId); } catch (_) {}
+        cvP.style.cursor = 'grabbing';
+        dragTo(e);
+        return;
+      }
+    }
+  });
+  function dragTo(e) {
+    const md = MODES[sim.mode];
+    const sr = md.series[sim.dragging];
+    if (!sr || !sim.pivotPx) return;
+    const rect = cvP.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    const origin = sim.dragging === 0 ? sim.pivotPx
+      : { x: sim.bobPx[sim.dragging - 1].x, y: sim.bobPx[sim.dragging - 1].y };
+    const th = Math.atan2(x - origin.x, y - origin.y);
+    sim.y[sr.i] = th;
+    for (const s of md.series) sim.y[s.i + 1] = 0;
+    sim.bobTrail = [];
+  }
+  cvP.addEventListener('pointermove', e => {
+    if (sim.dragging >= 0) { dragTo(e); return; }
+    const rect = cvP.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    const over = sim.bobPx.some(b => (x - b.x) ** 2 + (y - b.y) ** 2 <= b.r * b.r);
+    cvP.style.cursor = over ? 'grab' : 'default';
+  });
+  function endDrag() {
+    if (sim.dragging < 0) return;
+    sim.dragging = -1;
+    cvP.style.cursor = 'grab';
+    pushPhase();
+  }
+  cvP.addEventListener('pointerup', endDrag);
+  cvP.addEventListener('pointercancel', endDrag);
+  cvP.addEventListener('lostpointercapture', endDrag);
+
+  // ---------- управление ----------
+  function setRunning(v) {
+    sim.running = v;
+    btnPlay.textContent = v ? 'Пауза' : 'Пуск';
+  }
+  btnPlay.addEventListener('click', () => setRunning(!sim.running));
+  btnReset.addEventListener('click', resetSim);
+  $('speed').addEventListener('input', e => {
+    sim.speed = parseFloat(e.target.value);
+    $('speedOut').textContent = '×' + sim.speed.toFixed(2);
+  });
+  document.querySelectorAll('.tabs button').forEach(b =>
+    b.addEventListener('click', () => setMode(b.dataset.mode)));
+  window.addEventListener('keydown', e => {
+    const tag = e.target.tagName;
+    if (tag === 'INPUT' || tag === 'BUTTON' || tag === 'SUMMARY' || tag === 'A') return;
+    if (e.code === 'Space') { e.preventDefault(); setRunning(!sim.running); }
+    if (e.code === 'KeyR') resetSim();
+  });
+
+  // ---------- цикл ----------
+  const frameMsEl = $('frameMs');
+  let last = performance.now(), ema = 0;
+  function frame(now) {
+    const t0 = performance.now();
+    const dt = Math.min((now - last) / 1000, 0.25);
+    last = now;
+    if (sim.running && sim.dragging < 0) stepSim(dt * sim.speed);
+    drawPend();
+    drawPhase();
+    for (const [dd, fmt] of readoutSpans) dd.textContent = fmt(sim);
+    ema = ema * 0.95 + (performance.now() - t0) * 0.05;
+    frameMsEl.textContent = ema.toFixed(1);
+    requestAnimationFrame(frame);
+  }
+
+  setMode('single');
+  setRunning(sim.running);
+  requestAnimationFrame(frame);
+  window.__sim = sim;
+  window.__draw = () => { drawPend(); drawPhase(); };
+})();
+</script>
+</body>
+</html>
