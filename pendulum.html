@@ -1,4 +1,5 @@
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Маятник — фазовые портреты</title>
 <style>
   :root {
@@ -24,6 +25,7 @@
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; }
+  [hidden] { display: none !important; }
   body {
     background: var(--bg);
     color: var(--ink);
@@ -55,7 +57,7 @@
   .stage { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
   .panel-head {
-    display: flex; align-items: center; gap: 12px;
+    display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap;
     padding: 9px 14px; border-bottom: 1px solid var(--line); min-height: 38px;
   }
   .panel-title { font: 600 11px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
@@ -66,8 +68,15 @@
   .chip i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
   .toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); cursor: pointer; user-select: none; }
   .toggle input { accent-color: var(--accent); margin: 0; }
+  .seg { display: inline-flex; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 2px; gap: 2px; }
+  .seg button { font: 600 11px var(--sans); color: var(--ink-2); background: none; border: 0; border-radius: 5px; padding: 3px 8px; cursor: pointer; }
+  .seg button:hover { color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible { outline: 2px solid var(--accent-h); outline-offset: 1px; }
   canvas { display: block; width: 100%; aspect-ratio: 1.08 / 1; background: var(--canvas); }
   #cv-pend { touch-action: none; }
+  .energy-panel { grid-column: 1 / -1; }
+  #cv-energy { aspect-ratio: auto; height: 96px; }
 
   /* ---------- controls ---------- */
   .deck { display: grid; grid-template-columns: 1fr 264px; gap: 14px; margin-top: 14px; }
@@ -81,6 +90,11 @@
     border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; cursor: pointer;
   }
   .preset:hover { color: var(--accent-h); border-color: var(--accent); }
+
+  .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .presets button { font: 600 12.5px var(--sans); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 5px 14px; cursor: pointer; }
+  .presets button:hover { border-color: var(--accent); color: var(--accent-h); }
+  .presets button:focus-visible { outline: 2px solid var(--accent-h); outline-offset: 2px; }
 
   .side { display: flex; flex-direction: column; gap: 14px; }
   .playback { display: flex; gap: 10px; }
@@ -118,6 +132,10 @@
   }
   .eq.small { font-size: 14.5px; }
 
+  #btnRec.rec { color: #ff6b6b; border-color: #ff6b6b; }
+  .toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--line); color: var(--ink); font: 13px var(--sans); padding: 8px 16px; border-radius: 8px; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 9; }
+  .toast.show { opacity: 1; }
+
   footer { margin-top: 18px; color: var(--ink-3); font-size: 12.5px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   footer .ms { font-family: var(--mono); font-variant-numeric: tabular-nums; }
   footer a { color: var(--ink-2); }
@@ -125,6 +143,9 @@
   @media (max-width: 860px) {
     .stage, .deck, .sliders { grid-template-columns: 1fr; }
     h1 { font-size: 32px; }
+  }
+  @media (max-width: 520px) {
+    .panel-head .hint { display: none; }
   }
   @media (prefers-reduced-motion: reduce) {
     * { scroll-behavior: auto; }
@@ -150,8 +171,9 @@
       <div class="panel">
         <div class="panel-head">
           <span class="panel-title">Маятник</span>
+          <label class="toggle" id="ghostsWrap" hidden title="8 клонов с отличием в θ₁ на 10⁻⁶ рад — чувствительность к начальным условиям"><input type="checkbox" id="ghosts"> призраки</label>
           <span class="spacer"></span>
-          <span class="hint">грузик можно перетаскивать</span>
+          <span class="hint">грузик можно перетаскивать и бросать</span>
         </div>
         <canvas id="cv-pend" aria-label="Анимация маятника"></canvas>
       </div>
@@ -160,16 +182,28 @@
           <span class="panel-title">Фазовый портрет</span>
           <span class="legend" id="legend"></span>
           <span class="spacer"></span>
-          <label class="toggle" title="Обещание из ноутбука 2023 года: фазовое пространство маятника — цилиндр. Угол берётся по модулю 2π.">
-            <input type="checkbox" id="wrap"> цилиндр
-          </label>
+          <label class="toggle" id="fieldWrap" title="Векторное поле направлений и сепаратриса"><input type="checkbox" id="field" checked> поле</label>
+          <div class="seg" id="viewSeg" role="group" aria-label="Вид фазового пространства">
+            <button type="button" data-v="flat" aria-pressed="true">плоскость</button>
+            <button type="button" data-v="wrap" aria-pressed="false" title="Обещание из ноутбука 2023 года: θ mod 2π">цилиндр</button>
+            <button type="button" data-v="cyl3d" aria-pressed="false" title="Траектория наматывается на настоящий цилиндр">3D</button>
+          </div>
         </div>
         <canvas id="cv-phase" aria-label="Фазовый портрет"></canvas>
+      </div>
+      <div class="panel energy-panel">
+        <div class="panel-head">
+          <span class="panel-title">Энергия E(t)</span>
+        </div>
+        <canvas id="cv-energy" aria-label="График полной энергии"></canvas>
       </div>
     </section>
 
     <section class="deck">
-      <div class="card sliders" id="sliders"></div>
+      <div class="card">
+        <div class="presets" id="presets"></div>
+        <div class="sliders" id="sliders"></div>
+      </div>
       <div class="side">
         <div class="card">
           <div class="playback">
@@ -179,6 +213,10 @@
           <div class="srow" style="margin-top:12px">
             <label for="speed">Скорость времени <output id="speedOut">×1.00</output></label>
             <input type="range" id="speed" min="0.1" max="3" step="0.05" value="1">
+          </div>
+          <div class="playback" style="margin-top:12px">
+            <button class="btn btn-ghost" id="btnRec">⏺ Записать видео</button>
+            <button class="btn btn-ghost" id="btnShare">Ссылка</button>
           </div>
           <p class="kbd-hint"><kbd>Пробел</kbd> — пауза · <kbd>R</kbd> — сброс</p>
         </div>
@@ -204,7 +242,7 @@
         <h3>Численное решение</h3>
         <p>Система интегрируется методом Рунге–Кутты 4-го порядка с шагом 2 мс — прямо во время движения. В 2023-м это делал <code style="font-family:var(--mono);font-size:12.5px">scipy.solve_ivp</code> (DOP853), после чего Manim минутами рендерил видео. Теперь между «подвинул слайдер» и «увидел» — один кадр.</p>
         <h3>Фазовый цилиндр</h3>
-        <p>Последняя ячейка ноутбука 2023 года обещала: «в следующей версии фазовое пространство будет представлено цилиндром». Переключатель «цилиндр» выполняет это обещание: угол берётся по модулю 2π, и вращение («солнышко») перестаёт убегать за край портрета.</p>
+        <p>Последняя ячейка ноутбука 2023 года обещала: «в следующей версии фазовое пространство будет представлено цилиндром». Виды «цилиндр» и «3D» выполняют это обещание: в первом угол берётся по модулю 2π и вращение («солнышко») перестаёт убегать за край портрета, а во втором траектория буквально наматывается на цилиндр. Пунктирная кривая на плоском портрете — сепаратриса θ̇ = ±2√(g∕l)·cos(θ∕2), граница между колебаниями и вращением.</p>
       </div>
     </details>
   </main>
@@ -214,6 +252,7 @@
     <span>g по умолчанию — 2.0 м/с², как в оригинале · θ₀ = 2.71 ≈ e</span>
   </footer>
 </div>
+<div class="toast" id="toast" role="status"></div>
 
 <script>
 (() => {
@@ -233,12 +272,13 @@
     single: {
       sliders: [
         S('th0', 'Начальный угол θ₀', -3.14, 3.14, 0.01, 2.71, { unit: 'рад', resets: true }),
+        S('w0', 'Начальная скорость θ̇₀', -10, 10, 0.1, 0, { unit: 'рад/с', resets: true }),
         S('b', 'Вязкость b', 0, 5, 0.01, 0.35),
         gSlider,
         S('l', 'Длина стержня l', 0.1, 5, 0.1, 1.0, { unit: 'м' }),
         S('m', 'Масса груза m', 0.1, 10, 0.1, 5.0, { unit: 'кг' }),
       ],
-      init: p => [p.th0, 0],
+      init: p => [p.th0, p.w0],
       deriv: (t, y, p) => [y[1], -(p.g / p.l) * Math.sin(y[0]) - (p.b / (p.m * p.l)) * y[1]],
       reach: p => p.l,
       series: [{ i: 0, color: C.yellow, label: null }],
@@ -249,6 +289,7 @@
     forced: {
       sliders: [
         S('th0', 'Начальный угол θ₀', -3.14, 3.14, 0.01, 2.71, { unit: 'рад', resets: true }),
+        S('w0', 'Начальная скорость θ̇₀', -10, 10, 0.1, 0, { unit: 'рад/с', resets: true }),
         S('b', 'Вязкость b', 0, 5, 0.01, 0.35),
         gSlider,
         S('l', 'Длина стержня l', 0.1, 5, 0.1, 1.0, { unit: 'м' }),
@@ -256,7 +297,7 @@
         S('a1', 'Эксп. коэффициент a₁', -2, 2, 0.05, 1.0),
         S('a2', 'Период. коэффициент a₂', 0, 10, 0.05, 2.0),
       ],
-      init: p => [p.th0, 0],
+      init: p => [p.th0, p.w0],
       deriv: (t, y, p) => [y[1],
         Math.exp(p.a1 * t / 30) * Math.cos(p.a2 * t)
         - (p.g / p.l) * Math.sin(y[0]) - (p.b / (p.m * p.l)) * y[1]],
@@ -269,14 +310,16 @@
     double: {
       sliders: [
         S('th10', 'Начальный угол θ₁', -3.14, 3.14, 0.01, 2.71, { unit: 'рад', resets: true }),
+        S('w10', 'Нач. скорость θ̇₁', -10, 10, 0.1, 0, { unit: 'рад/с', resets: true }),
         S('th20', 'Начальный угол θ₂', -3.14, 3.14, 0.01, 2.71, { unit: 'рад', resets: true }),
+        S('w20', 'Нач. скорость θ̇₂', -10, 10, 0.1, 0, { unit: 'рад/с', resets: true }),
         S('l1', 'Длина стержня l₁', 0.1, 5, 0.1, 1.0, { unit: 'м' }),
         S('l2', 'Длина стержня l₂', 0.1, 5, 0.1, 1.0, { unit: 'м' }),
         S('m1', 'Масса груза m₁', 0.1, 10, 0.1, 5.0, { unit: 'кг' }),
         S('m2', 'Масса груза m₂', 0.1, 10, 0.1, 5.0, { unit: 'кг' }),
         gSlider,
       ],
-      init: p => [p.th10, 0, p.th20, 0],
+      init: p => [p.th10, p.w10, p.th20, p.w20],
       deriv: (t, y, p) => {
         const [a1, w1, a2, w2] = y, { m1, m2, l1, l2, g } = p;
         const d = a1 - a2, sd = Math.sin(d), cd = Math.cos(d);
@@ -319,11 +362,21 @@
     E:   { label: 'E',  fmt: s => MODES[s.mode].energy(s.y, P).toFixed(2) + ' Дж' },
   };
 
+  // ---------- пресеты ----------
+  const PRESETS = [
+    { label: 'Солнышко', mode: 'single', view: 'wrap', params: { th0: 0, w0: 4.5, b: 0.1, g: 2, l: 1, m: 5 } },
+    { label: 'Сепаратриса', mode: 'single', view: 'flat', field: true, params: { th0: 3.1, w0: 0, b: 0, g: 2, l: 1, m: 5 } },
+    { label: 'Резонанс', mode: 'forced', view: 'flat', params: { th0: 0.1, w0: 0, b: 0.1, g: 2, l: 1, m: 5, a1: 0, a2: 1.4 } },
+    { label: 'Хаос', mode: 'double', view: 'flat', ghosts: true, params: { th10: 2.71, w10: 0, th20: 2.71, w20: 0, l1: 1, l2: 1, m1: 5, m2: 5, g: 2 } },
+  ];
+
   // ---------- состояние ----------
   const P = {};
+  const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const sim = {
     mode: 'single', y: [], t: 0,
-    running: !matchMedia('(prefers-reduced-motion: reduce)').matches,
+    running: !REDUCED,
+    view: 'flat', energy: [], ghosts: null, yaw: 0.6, pitch: 0.35,
     dragging: -1, speed: 1,
     phase: [],            // по одному плоскому массиву [θ,ω,θ,ω,…] на серию
     bobTrail: [],         // [{t, ang:[…]}]
@@ -348,7 +401,7 @@
     let mt = 0.8, mw = 0.8;
     for (const arr of sim.phase) {
       for (let i = 0; i < arr.length; i += 2) {
-        if (!Number.isFinite(arr[i])) continue;
+        if (!Number.isFinite(arr[i]) || !Number.isFinite(arr[i + 1])) continue;
         const a = Math.abs(arr[i]), b = Math.abs(arr[i + 1]);
         if (a > mt) mt = a;
         if (b > mw) mw = b;
@@ -367,16 +420,19 @@
       arr.push(th, w);
       if (arr.length > TRAIL_CAP) { arr.splice(0, TRAIL_CAP / 4); trimmed = true; }
       const a = Math.abs(th), b = Math.abs(w);
-      if (a > sim.maxTh) sim.maxTh = a;
-      if (b > sim.maxW) sim.maxW = b;
+      if (Number.isFinite(a) && a > sim.maxTh) sim.maxTh = a;
+      if (Number.isFinite(b) && b > sim.maxW) sim.maxW = b;
     });
     if (trimmed) recomputeMax();
+    sim.energy.push(sim.t, md.energy(sim.y, P));
+    if (sim.energy.length > TRAIL_CAP / 2) sim.energy.splice(0, TRAIL_CAP / 8);
   }
 
   function stepSim(dt) {
     const md = MODES[sim.mode];
     const n = Math.max(1, Math.ceil(dt / H)), h = dt / n;
     for (let i = 0; i < n; i++) {
+      if (sim.ghosts) for (let gi = 0; gi < sim.ghosts.length; gi++) sim.ghosts[gi] = rk4(sim.t, sim.ghosts[gi], h, md.deriv);
       sim.y = rk4(sim.t, sim.y, h, md.deriv);
       sim.t += h;
       if (++pushCnt >= PUSH_EVERY) { pushCnt = 0; pushPhase(); }
@@ -390,22 +446,38 @@
     sim.y = md.init(P);
     sim.t = 0;
     sim.phase = md.series.map(() => []);
+    sim.energy = [];
     sim.bobTrail = [];
     sim.maxTh = Math.max(...md.series.map(s => Math.abs(sim.y[s.i])), 0.8);
     sim.maxW = 0.8;
     pushCnt = 0;
     sim.dragging = -1;
     pushPhase();
+    initGhosts();
   }
 
   // ---------- DOM ----------
   const $ = id => document.getElementById(id);
   const slidersEl = $('sliders'), readoutsEl = $('readouts'), legendEl = $('legend');
-  const btnPlay = $('btnPlay'), btnReset = $('btnReset'), wrapEl = $('wrap');
+  const btnPlay = $('btnPlay'), btnReset = $('btnReset');
+  const viewSeg = $('viewSeg'), fieldEl = $('field'), fieldWrap = $('fieldWrap');
+  const ghostsEl = $('ghosts'), ghostsWrap = $('ghostsWrap');
   let readoutSpans = [];
+  let sliderCtl = {};
+
+  function initGhosts() {
+    if (sim.mode === 'double' && ghostsEl.checked) {
+      sim.ghosts = Array.from({ length: 8 }, (_, k) => {
+        const y = sim.y.slice();
+        y[0] += (k + 1) * 1e-6;
+        return y;
+      });
+    } else sim.ghosts = null;
+  }
 
   function buildSliders() {
     slidersEl.innerHTML = '';
+    sliderCtl = {};
     for (const cfg of MODES[sim.mode].sliders) {
       P[cfg.key] = cfg.def;
       const row = document.createElement('div');
@@ -432,11 +504,44 @@
         P[cfg.key] = parseFloat(input.value);
         out.textContent = fmt(P[cfg.key]);
         if (cfg.resets) resetSim();
+        updateHash();
       });
       label.htmlFor = input.id = 'sl-' + cfg.key;
       row.append(label, input);
       slidersEl.append(row);
+      sliderCtl[cfg.key] = { input, out, fmt };
     }
+  }
+
+  function buildPresets() {
+    const el = $('presets');
+    for (const p of PRESETS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = p.label;
+      b.addEventListener('click', () => applyPreset(p));
+      el.append(b);
+    }
+  }
+
+  function applyParams(params) {
+    for (const [k, v] of Object.entries(params)) {
+      const ctl = sliderCtl[k];
+      if (!ctl) continue;
+      P[k] = v;
+      ctl.input.value = v;
+      ctl.out.textContent = ctl.fmt(v);
+    }
+  }
+
+  function applyPreset(p) {
+    setMode(p.mode);
+    applyParams(p.params);
+    setView(p.view || 'flat');
+    ghostsEl.checked = !!p.ghosts;
+    if ('field' in p) fieldEl.checked = p.field;
+    resetSim();
+    updateHash();
   }
 
   function buildReadouts() {
@@ -472,18 +577,27 @@
     buildSliders();
     buildReadouts();
     buildLegend();
+    ghostsWrap.hidden = mode !== 'double';
+    fieldWrap.hidden = MODES[mode].series.length !== 1;
     resetSim();
   }
 
+  function setView(v) {
+    sim.view = v;
+    viewSeg.querySelectorAll('button').forEach(b =>
+      b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+    cvF.style.touchAction = v === 'cyl3d' ? 'none' : '';
+  }
+
   // ---------- канвасы ----------
-  const cvP = $('cv-pend'), cvF = $('cv-phase');
-  const ctxP = cvP.getContext('2d'), ctxF = cvF.getContext('2d');
+  const cvP = $('cv-pend'), cvF = $('cv-phase'), cvE = $('cv-energy');
+  const ctxP = cvP.getContext('2d'), ctxF = cvF.getContext('2d'), ctxE = cvE.getContext('2d');
   const dpr = Math.min(devicePixelRatio || 1, 2);
   function fitCanvas(cv) {
     const w = cv.clientWidth, h = cv.clientHeight;
     if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
   }
-  new ResizeObserver(() => { fitCanvas(cvP); fitCanvas(cvF); }).observe(cvP);
+  new ResizeObserver(() => { fitCanvas(cvP); fitCanvas(cvF); fitCanvas(cvE); }).observe(cvP);
 
   function mathText(ctx, ch, sub, x, y, size, color) {
     ctx.fillStyle = color;
@@ -569,6 +683,31 @@
       ctxP.globalAlpha = 1;
     }
 
+    // призрачные клоны: чувствительность к начальным условиям
+    if (sim.ghosts) {
+      for (const gs of sim.ghosts) {
+        let gpx = cx, gpy = cy;
+        ctxP.strokeStyle = 'rgba(236,236,236,0.10)';
+        ctxP.lineWidth = 1.2;
+        ctxP.beginPath();
+        ctxP.moveTo(gpx, gpy);
+        const ends = [];
+        for (let j = 0; j < md.bobs.length; j++) {
+          gpx += s * md.bobs[j].l(P) * Math.sin(gs[md.series[j].i]);
+          gpy += s * md.bobs[j].l(P) * Math.cos(gs[md.series[j].i]);
+          ctxP.lineTo(gpx, gpy);
+          ends.push([gpx, gpy, md.bobs[j].color]);
+        }
+        ctxP.stroke();
+        ctxP.globalAlpha = 0.3;
+        for (const [ex, ey, ec] of ends) {
+          ctxP.fillStyle = ec;
+          ctxP.beginPath(); ctxP.arc(ex, ey, 3.4, 0, TAU); ctxP.fill();
+        }
+        ctxP.globalAlpha = 1;
+      }
+    }
+
     // стержни
     ctxP.strokeStyle = C.white;
     ctxP.lineWidth = 2.2;
@@ -609,6 +748,7 @@
   }
 
   const niceStep = raw => {
+    if (!Number.isFinite(raw) || raw <= 0) return 1;
     const p = Math.pow(10, Math.floor(Math.log10(raw)));
     const m = raw / p;
     return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p;
@@ -621,12 +761,14 @@
     ctxF.fillStyle = C.canvas;
     ctxF.fillRect(0, 0, W, Hh);
     const md = MODES[sim.mode];
-    const wrap = wrapEl.checked;
+    const wrap = sim.view === 'wrap';
 
-    const tTh = wrap ? Math.PI : Math.max(sim.maxTh * 1.15, 1.2);
-    const tW = Math.max(sim.maxW * 1.15, 1.2);
+    const tTh = wrap ? Math.PI : Math.min(Math.max(sim.maxTh * 1.15, 1.2), 1e4);
+    const tW = Math.min(Math.max(sim.maxW * 1.15, 1.2), 1e4);
     sim.rTh += (tTh - sim.rTh) * 0.12;
     sim.rW += (tW - sim.rW) * 0.12;
+
+    if (sim.view === 'cyl3d') { drawPhase3D(W, Hh); return; }
 
     const pad = 30;
     const cx = W / 2, cy = Hh / 2;
@@ -678,6 +820,46 @@
     mathText(ctxF, 'θ', '', W - pad * 0.4 - 4, cy - 10, 17, C.white);
     mathText(ctxF, 'θ̇', '', cx + 10, pad * 0.4 + 14, 17, C.white);
 
+    // векторное поле и сепаратриса (только одномаятниковые режимы)
+    if (fieldEl.checked && md.series.length === 1) {
+      ctxF.strokeStyle = C.grey;
+      ctxF.fillStyle = C.grey;
+      ctxF.lineWidth = 1;
+      ctxF.globalAlpha = 0.16;
+      const stepPx = 36;
+      for (let gx = pad; gx <= W - pad; gx += stepPx) {
+        for (let gy = pad; gy <= Hh - pad; gy += stepPx) {
+          const th = (gx - cx) / sx, w = (cy - gy) / sy;
+          const d = md.deriv(sim.t, [th, w], P);
+          const vx = d[0] * sx, vy = -d[1] * sy;
+          const n = Math.hypot(vx, vy) || 1;
+          ctxF.beginPath();
+          ctxF.moveTo(gx - vx / n * 4, gy - vy / n * 4);
+          ctxF.lineTo(gx + vx / n * 4, gy + vy / n * 4);
+          ctxF.stroke();
+          ctxF.beginPath(); ctxF.arc(gx + vx / n * 4, gy + vy / n * 4, 1.1, 0, TAU); ctxF.fill();
+        }
+      }
+      // сепаратриса θ̇ = ±2·√(g/l)·|cos(θ/2)| — точна только для консервативного маятника
+      if (sim.mode === 'single' && P.b < 0.005) {
+        ctxF.globalAlpha = 0.5;
+        ctxF.strokeStyle = '#17a8a8';
+        ctxF.setLineDash([5, 5]);
+        const sepK = 2 * Math.sqrt(P.g / P.l);
+        for (const sgn of [1, -1]) {
+          ctxF.beginPath();
+          let first = true;
+          for (let th = -sim.rTh; th <= sim.rTh; th += sim.rTh / 160) {
+            const x = X(th), y = Y(sgn * sepK * Math.abs(Math.cos(th / 2)));
+            if (first) { ctxF.moveTo(x, y); first = false; } else ctxF.lineTo(x, y);
+          }
+          ctxF.stroke();
+        }
+        ctxF.setLineDash([]);
+        ctxF.globalAlpha = 1;
+      }
+    }
+
     // траектории
     md.series.forEach((sr, k) => {
       const arr = sim.phase[k];
@@ -706,19 +888,165 @@
       ctxF.beginPath(); ctxF.arc(x, y, 6.5, 0, TAU); ctxF.fillStyle = C.canvas; ctxF.fill();
       ctxF.beginPath(); ctxF.arc(x, y, 4.5, 0, TAU); ctxF.fillStyle = sr.color; ctxF.fill();
     });
+
+    // призраки на портрете
+    if (sim.ghosts) {
+      ctxF.globalAlpha = 0.35;
+      for (const gs of sim.ghosts) {
+        for (const sr of md.series) {
+          let th = gs[sr.i];
+          if (wrap) th = wrapPi(th);
+          ctxF.fillStyle = sr.color;
+          ctxF.beginPath(); ctxF.arc(X(th), Y(gs[sr.i + 1]), 2.4, 0, TAU); ctxF.fill();
+        }
+      }
+      ctxF.globalAlpha = 1;
+    }
+  }
+
+  function drawPhase3D(W, Hh) {
+    const md = MODES[sim.mode];
+    const cx = W / 2, cy = Hh / 2;
+    const L = 1.7, R = 1, D = 4.2;
+    const S3 = Math.min(W, Hh) * 0.3;
+    const cp = Math.cos(sim.pitch), sp = Math.sin(sim.pitch);
+    const cw = Math.cos(sim.yaw), sw = Math.sin(sim.yaw);
+    const proj = (x, y, z) => {
+      const x1 = x * cw + z * sw, z1 = -x * sw + z * cw;
+      const y2 = y * cp - z1 * sp, z2 = y * sp + z1 * cp;
+      const f = D / (D - z2);
+      return [cx + x1 * f * S3, cy - y2 * f * S3];
+    };
+    const P3 = (th, w) => proj(Math.max(-1, Math.min(1, w / sim.rW)) * L, -Math.cos(th) * R, Math.sin(th) * R);
+
+    // каркас цилиндра: два обода и четыре образующие
+    ctxF.strokeStyle = C.grey;
+    ctxF.lineWidth = 1;
+    ctxF.globalAlpha = 0.35;
+    for (const ex of [-L, L]) {
+      ctxF.beginPath();
+      for (let i = 0; i <= 72; i++) {
+        const a = i * TAU / 72;
+        const [x, y] = proj(ex, -Math.cos(a) * R, Math.sin(a) * R);
+        i === 0 ? ctxF.moveTo(x, y) : ctxF.lineTo(x, y);
+      }
+      ctxF.stroke();
+    }
+    ctxF.globalAlpha = 0.15;
+    for (let k = 0; k < 4; k++) {
+      const a = k * Math.PI / 2;
+      const [x1, y1] = proj(-L, -Math.cos(a) * R, Math.sin(a) * R);
+      const [x2, y2] = proj(L, -Math.cos(a) * R, Math.sin(a) * R);
+      ctxF.beginPath(); ctxF.moveTo(x1, y1); ctxF.lineTo(x2, y2); ctxF.stroke();
+    }
+    ctxF.globalAlpha = 1;
+    ctxF.textAlign = 'left'; ctxF.textBaseline = 'middle';
+    const [lx, ly] = proj(L * 1.22, 0, 0);
+    mathText(ctxF, 'θ̇', '', lx, ly, 16, C.grey);
+
+    // траектории, намотанные на цилиндр
+    md.series.forEach((sr, k) => {
+      const arr = sim.phase[k];
+      if (arr.length >= 4) {
+        ctxF.strokeStyle = sr.color;
+        ctxF.lineWidth = 1.5;
+        ctxF.globalAlpha = 0.8;
+        ctxF.beginPath();
+        let started = false;
+        for (let i = 0; i < arr.length; i += 2) {
+          if (!Number.isFinite(arr[i])) { started = false; continue; }
+          const [x, y] = P3(arr[i], arr[i + 1]);
+          if (!started) { ctxF.moveTo(x, y); started = true; } else ctxF.lineTo(x, y);
+        }
+        ctxF.stroke();
+        ctxF.globalAlpha = 1;
+      }
+      const [x, y] = P3(sim.y[sr.i], sim.y[sr.i + 1]);
+      ctxF.beginPath(); ctxF.arc(x, y, 6, 0, TAU); ctxF.fillStyle = C.canvas; ctxF.fill();
+      ctxF.beginPath(); ctxF.arc(x, y, 4.2, 0, TAU); ctxF.fillStyle = sr.color; ctxF.fill();
+    });
+
+    // призраки и в 3D
+    if (sim.ghosts) {
+      ctxF.globalAlpha = 0.35;
+      for (const gs of sim.ghosts) {
+        for (const sr of md.series) {
+          const [x, y] = P3(gs[sr.i], gs[sr.i + 1]);
+          ctxF.fillStyle = sr.color;
+          ctxF.beginPath(); ctxF.arc(x, y, 2.4, 0, TAU); ctxF.fill();
+        }
+      }
+      ctxF.globalAlpha = 1;
+    }
+
+    ctxF.font = '11px ui-monospace, Menlo, monospace';
+    ctxF.fillStyle = C.grey;
+    ctxF.textAlign = 'left'; ctxF.textBaseline = 'alphabetic';
+    ctxF.fillText((REDUCED ? '' : 'крутится само · ') + 'перетащите, чтобы повернуть', 12, Hh - 12);
+  }
+
+  function drawEnergy() {
+    fitCanvas(cvE);
+    const W = cvE.width / dpr, Hh = cvE.height / dpr;
+    ctxE.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctxE.fillStyle = C.canvas;
+    ctxE.fillRect(0, 0, W, Hh);
+    const arr = sim.energy;
+    if (arr.length < 4) return;
+    let t0 = Infinity, t1 = -Infinity, eMax = 0;
+    for (let i = 0; i < arr.length; i += 2) {
+      if (!Number.isFinite(arr[i]) || !Number.isFinite(arr[i + 1])) continue;
+      if (arr[i] < t0) t0 = arr[i];
+      if (arr[i] > t1) t1 = arr[i];
+      if (arr[i + 1] > eMax) eMax = arr[i + 1];
+    }
+    if (!(t1 > t0)) return;
+    eMax = Math.max(eMax, 1e-6);
+    const padX = 46, padY = 12;
+    const X = t => padX + (t - t0) / (t1 - t0) * (W - padX - 14);
+    const Y = e => Hh - padY - e / (eMax * 1.08) * (Hh - 2 * padY);
+    ctxE.strokeStyle = '#3b3733';
+    ctxE.lineWidth = 1;
+    ctxE.beginPath(); ctxE.moveTo(padX, Hh - padY); ctxE.lineTo(W - 10, Hh - padY); ctxE.stroke();
+    ctxE.font = '10.5px ui-monospace, Menlo, monospace';
+    ctxE.fillStyle = C.grey;
+    ctxE.textAlign = 'left'; ctxE.textBaseline = 'middle';
+    ctxE.fillText(eMax.toFixed(1), 8, Y(eMax));
+    ctxE.fillText('0', 8, Hh - padY);
+    ctxE.textBaseline = 'bottom';
+    ctxE.fillText(t0.toFixed(0) + ' с', padX + 4, Hh - padY - 3);
+    ctxE.textAlign = 'right';
+    ctxE.fillText(t1.toFixed(0) + ' с', W - 14, Hh - padY - 3);
+    ctxE.textAlign = 'left'; ctxE.textBaseline = 'middle';
+    ctxE.strokeStyle = C.orange;
+    ctxE.lineWidth = 1.6;
+    ctxE.beginPath();
+    let started = false;
+    for (let i = 0; i < arr.length; i += 2) {
+      if (!Number.isFinite(arr[i])) { started = false; continue; }
+      const x = X(arr[i]), y = Y(arr[i + 1]);
+      if (!started) { ctxE.moveTo(x, y); started = true; } else ctxE.lineTo(x, y);
+    }
+    ctxE.stroke();
   }
 
   // ---------- перетаскивание ----------
   cvP.addEventListener('pointerdown', e => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || sim.dragging >= 0) return;
     const rect = cvP.getBoundingClientRect();
     const x = e.clientX - rect.left, y = e.clientY - rect.top;
     for (let k = sim.bobPx.length - 1; k >= 0; k--) {
       const b = sim.bobPx[k];
       if ((x - b.x) ** 2 + (y - b.y) ** 2 <= b.r * b.r) {
         sim.dragging = k;
-        // разрыв фазового следа: скачок состояния при перетаскивании — не траектория
+        sim.dragPointer = e.pointerId;
+        const ci = MODES[sim.mode].series[k].i;
+        sim.dragUnwrap = sim.y[ci];
+        sim.dragLastRaw = wrapPi(sim.y[ci]);
+        sim.dragSamples = [];
+        // разрыв следов: скачок состояния при перетаскивании — не траектория
         for (const arr of sim.phase) arr.push(NaN, NaN);
+        sim.energy.push(NaN, NaN);
         try { cvP.setPointerCapture(e.pointerId); } catch (_) {}
         cvP.style.cursor = 'grabbing';
         dragTo(e);
@@ -735,26 +1063,62 @@
     const origin = sim.dragging === 0 ? sim.pivotPx
       : { x: sim.bobPx[sim.dragging - 1].x, y: sim.bobPx[sim.dragging - 1].y };
     const th = Math.atan2(x - origin.x, y - origin.y);
-    sim.y[sr.i] = th;
+    // непрерывный угол: протаскивание через низ наматывает обороты
+    sim.dragUnwrap += wrapPi(th - sim.dragLastRaw);
+    sim.dragLastRaw = th;
+    sim.y[sr.i] = sim.dragUnwrap;
     for (const s of md.series) sim.y[s.i + 1] = 0;
+    sim.dragSamples.push({ tm: performance.now() / 1000, a: sim.dragUnwrap });
+    if (sim.dragSamples.length > 8) sim.dragSamples.shift();
     sim.bobTrail = [];
   }
   cvP.addEventListener('pointermove', e => {
-    if (sim.dragging >= 0) { dragTo(e); return; }
+    if (sim.dragging >= 0) {
+      if (e.pointerId === sim.dragPointer) dragTo(e);
+      return;
+    }
     const rect = cvP.getBoundingClientRect();
     const x = e.clientX - rect.left, y = e.clientY - rect.top;
     const over = sim.bobPx.some(b => (x - b.x) ** 2 + (y - b.y) ** 2 <= b.r * b.r);
     cvP.style.cursor = over ? 'grab' : 'default';
   });
-  function endDrag() {
+  function endDrag(fling) {
     if (sim.dragging < 0) return;
+    const sr = MODES[sim.mode].series[sim.dragging];
     sim.dragging = -1;
     cvP.style.cursor = 'grab';
+    // бросок: угловая скорость из последних перемещений мыши
+    if (fling && sr && sim.dragSamples.length >= 2) {
+      const a = sim.dragSamples[0], b = sim.dragSamples[sim.dragSamples.length - 1];
+      const dt = b.tm - a.tm;
+      if (dt > 0.02 && performance.now() / 1000 - b.tm < 0.12) {
+        // деление на sim.speed: экранная скорость после броска равна скорости руки
+        sim.y[sr.i + 1] = Math.max(-25, Math.min(25, (b.a - a.a) / dt / sim.speed));
+      }
+    }
+    initGhosts();
     pushPhase();
   }
-  cvP.addEventListener('pointerup', endDrag);
-  cvP.addEventListener('pointercancel', endDrag);
-  cvP.addEventListener('lostpointercapture', endDrag);
+  cvP.addEventListener('pointerup', e => { if (e.pointerId === sim.dragPointer) endDrag(true); });
+  cvP.addEventListener('pointercancel', e => { if (e.pointerId === sim.dragPointer) endDrag(false); });
+  cvP.addEventListener('lostpointercapture', e => { if (e.pointerId === sim.dragPointer) endDrag(false); });
+
+  // вращение 3D-цилиндра
+  let rot = null;
+  cvF.addEventListener('pointerdown', e => {
+    if (sim.view !== 'cyl3d' || e.button !== 0 || rot) return;
+    rot = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    try { cvF.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  cvF.addEventListener('pointermove', e => {
+    if (!rot || e.pointerId !== rot.id) return;
+    sim.yaw += (e.clientX - rot.x) * 0.008;
+    sim.pitch = Math.max(-1.3, Math.min(1.3, sim.pitch + (e.clientY - rot.y) * 0.008));
+    rot = { x: e.clientX, y: e.clientY, id: rot.id };
+  });
+  const endRot = e => { if (rot && e.pointerId === rot.id) rot = null; };
+  cvF.addEventListener('pointerup', endRot);
+  cvF.addEventListener('pointercancel', endRot);
 
   // ---------- управление ----------
   function setRunning(v) {
@@ -766,9 +1130,106 @@
   $('speed').addEventListener('input', e => {
     sim.speed = parseFloat(e.target.value);
     $('speedOut').textContent = '×' + sim.speed.toFixed(2);
+    updateHash();
   });
   document.querySelectorAll('.tabs button').forEach(b =>
-    b.addEventListener('click', () => setMode(b.dataset.mode)));
+    b.addEventListener('click', () => { setMode(b.dataset.mode); updateHash(); }));
+  viewSeg.querySelectorAll('button').forEach(b =>
+    b.addEventListener('click', () => { setView(b.dataset.v); updateHash(); }));
+  ghostsEl.addEventListener('change', () => { initGhosts(); updateHash(); });
+  fieldEl.addEventListener('change', updateHash);
+
+  // ---------- ссылка на текущее состояние ----------
+  function buildHash() {
+    const q = new URLSearchParams();
+    q.set('mode', sim.mode);
+    for (const cfg of MODES[sim.mode].sliders) q.set(cfg.key, String(P[cfg.key]));
+    q.set('view', sim.view);
+    q.set('spd', String(sim.speed));
+    q.set('field', fieldEl.checked ? '1' : '0');
+    if (ghostsEl.checked) q.set('gh', '1');
+    return '#' + q.toString();
+  }
+  let hashTimer = 0;
+  function updateHash() {
+    // дебаунс: Safari ограничивает replaceState ~100 вызовами за 30 с
+    clearTimeout(hashTimer);
+    hashTimer = setTimeout(() => {
+      try { history.replaceState(null, '', buildHash()); } catch (_) {}
+    }, 250);
+  }
+  function applyHash() {
+    const q = new URLSearchParams(location.hash.slice(1));
+    // старый ключ 'm' совпадал со слайдером массы — принимаем его как режим только если это имя режима
+    const m = q.get('mode') || (MODES[q.get('m')] ? q.get('m') : null);
+    setMode(m && MODES[m] ? m : 'single');
+    const params = {};
+    for (const cfg of MODES[sim.mode].sliders) {
+      if (!q.has(cfg.key)) continue;
+      const v = parseFloat(q.get(cfg.key));
+      if (Number.isFinite(v)) params[cfg.key] = Math.min(cfg.max, Math.max(cfg.min, v));
+    }
+    applyParams(params);
+    const view = q.get('view');
+    if (['flat', 'wrap', 'cyl3d'].includes(view)) setView(view);
+    if (q.get('field') === '0') fieldEl.checked = false;
+    ghostsEl.checked = q.get('gh') === '1';
+    const spd = parseFloat(q.get('spd'));
+    if (Number.isFinite(spd) && spd >= 0.1 && spd <= 3) {
+      sim.speed = spd;
+      $('speed').value = spd;
+      $('speedOut').textContent = '×' + spd.toFixed(2);
+    }
+    resetSim();
+  }
+  const toastEl = $('toast');
+  let toastTimer = 0;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1800);
+  }
+  $('btnShare').addEventListener('click', () => {
+    try { history.replaceState(null, '', buildHash()); } catch (_) {}
+    const href = location.href.split('#')[0] + buildHash();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(href).then(() => toast('Ссылка скопирована'), () => prompt('Скопируйте ссылку:', href));
+    } else prompt('Скопируйте ссылку:', href);
+  });
+  window.addEventListener('hashchange', applyHash);
+
+  // ---------- запись видео ----------
+  const btnRec = $('btnRec');
+  let rec = null;
+  btnRec.addEventListener('click', () => {
+    if (rec) { rec.mr.stop(); return; }
+    if (typeof MediaRecorder === 'undefined') { toast('Запись видео не поддерживается браузером'); return; }
+    const cnv = document.createElement('canvas');
+    cnv.width = cvP.width + cvF.width;
+    cnv.height = Math.max(cvP.height, cvF.height);
+    const mime = ['video/webm;codecs=vp9', 'video/webm', 'video/mp4'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+    const mr = new MediaRecorder(cnv.captureStream(30), mime ? { mimeType: mime } : undefined);
+    const chunks = [];
+    mr.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    mr.onstop = () => {
+      const type = mr.mimeType || mime || 'video/webm';
+      const url = URL.createObjectURL(new Blob(chunks, { type }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'mayatnik-' + sim.mode + (type.includes('mp4') ? '.mp4' : '.webm');
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      rec = null;
+      btnRec.classList.remove('rec');
+      btnRec.textContent = '⏺ Записать видео';
+      toast('Видео сохранено');
+    };
+    rec = { mr, cnv, ctx: cnv.getContext('2d'), w1: cvP.width };
+    mr.start();
+    btnRec.classList.add('rec');
+    btnRec.textContent = '⏹ Стоп — сохранить';
+  });
   window.addEventListener('keydown', e => {
     const tag = e.target.tagName;
     if (tag === 'INPUT' || tag === 'BUTTON' || tag === 'SUMMARY' || tag === 'A') return;
@@ -784,18 +1245,31 @@
     const dt = Math.min((now - last) / 1000, 0.25);
     last = now;
     if (sim.running && sim.dragging < 0) stepSim(dt * sim.speed);
+    if (sim.view === 'cyl3d' && !rot && !REDUCED) sim.yaw += dt * 0.25;
     drawPend();
     drawPhase();
+    drawEnergy();
+    if (rec) {
+      rec.ctx.fillStyle = C.canvas;
+      rec.ctx.fillRect(0, 0, rec.cnv.width, rec.cnv.height);
+      rec.ctx.drawImage(cvP, 0, 0, rec.w1, rec.cnv.height);
+      rec.ctx.drawImage(cvF, rec.w1, 0, rec.cnv.width - rec.w1, rec.cnv.height);
+    }
     for (const [dd, fmt] of readoutSpans) dd.textContent = fmt(sim);
     ema = ema * 0.95 + (performance.now() - t0) * 0.05;
     frameMsEl.textContent = ema.toFixed(1);
     requestAnimationFrame(frame);
   }
 
-  setMode('single');
+  buildPresets();
+  applyHash();
   setRunning(sim.running);
   requestAnimationFrame(frame);
   window.__sim = sim;
-  window.__draw = () => { drawPend(); drawPhase(); };
+  window.__draw = () => { drawPend(); drawPhase(); drawEnergy(); };
+  window.__preset = applyPreset;
+  window.__setView = setView;
+  window.__applyHash = applyHash;
+  window.__step = dt => stepSim(dt);
 })();
 </script>
